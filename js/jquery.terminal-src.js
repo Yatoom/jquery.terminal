@@ -819,7 +819,7 @@
         }
         // -----------------------------------------------------------------------
         // :: Search through command line history. If next is not defined or false
-        // :: it searches for the first item from the end. If true it search for 
+        // :: it searches for the first item from the end. If true it search for
         // :: the next item
         // -----------------------------------------------------------------------
         function reverse_history_search(next) {
@@ -1538,7 +1538,104 @@
         }
         // Keystrokes
         var object;
-        $(document.documentElement || window).bind('keypress.cmd', function(e) {
+        var apostrophe = false;
+        var normalLayout = false;
+        $(document.documentElement || window).bind('keypress.cmd keydown.cmd keyup.cmd', function(e) {
+
+            // Fix for keyboards with dead keys
+            
+            /* How it works:
+            Keyboard with dead keys use no keypress for apostrophes. Instead they
+            wait for the next character and only use keyup/keydown events. E.g.
+            if you type ['] + [u], then the following happens:
+
+            1. keyUp event : 222
+            2. (wait for next key)
+            3. keyDown event : 229
+            4. keyUp event: 85 (keycode of the [u])
+
+            But, if the character is not compatible with the apostrophe (e.g. a [d]), we get:
+            1. keyUp event : 222
+            2. (wait for next key)
+            2. keyUp event: 68 (D)
+
+            Instead, for a normal layout, we get:
+
+            1. keyDown event: 222
+            2. keyPress event: 39 (')
+            3. keyUp event: 222
+
+            4. keyDown event: 85 (U)
+            5. keyPress event: 117 (u)
+            6. keyUp event: 85 (U)
+
+            Yet to fix: for dead-key layout, if you press the next character too
+            fast after the one that comes after the apostrophe, the keyup event
+            of the second character will be used instead of the first, i.e.
+            only the second character is visible.
+            */
+
+            // Normal layout indicator
+            if (e.which == 39 || e.which == 34) {
+                if (!normalLayout) {
+                    normalLayout = true;
+                }
+                apostrophe = false;
+                return false;
+            }
+
+            // Dead key layout indicator
+            if (normalLayout && e.which == 229) {
+                normalLayout = false;
+            }
+
+            // When we have a keycode 222, we insert a ' or a "
+            if (e.type == "keyup" && e.which === 222) {
+                e.shiftKey ? self.insert('"') : self.insert("'")
+                apostrophe = true
+                return false;
+            }
+
+            // If backspace is pressed, we reset the apostrophe to false
+            if (e.which == 8) {
+                if (apostrophe && !normalLayout) {
+                    // Double backspace required, so we trigger one for you.
+                    var e = jQuery.Event("keydown");
+                    e.which = 8;
+                    keydown_event(e)
+                }
+
+                apostrophe = false;
+            }
+
+            // Apostrophe mode, exclude keydown and shift keyup events.
+            if (apostrophe && e.type !== "keydown" && e.which !== 16) {
+
+                // Reset apostrophe.
+                apostrophe = false;
+
+                // If we use a dead layout, there will be a keyup event.
+                if (e.type =="keyup") {
+
+                    // We insert the character of this event.
+                    // Sometimes we get the wrong case, so we fix this first.
+                    var char = String.fromCharCode(e.which)
+                    var c = e.shiftKey ? char.toUpperCase() : char.toLowerCase();
+
+                    // And then we insert.
+                    self.insert(c)
+
+                    return false;
+                }
+            }
+
+            // Below this, we do not need the keydown/keyup events anymore.
+            if (e.type !== "keypress") {
+                return true;
+            }
+
+            // END FIX
+
             var result;
             if (e.ctrlKey && e.which === 99) { // CTRL+C
                 return true;
@@ -3632,7 +3729,7 @@
                 },
                 // -----------------------------------------------------------------------
                 // :: Make the terminal in focus or blur depending on the first argument.
-                // :: If there is more then one terminal it will switch to next one, 
+                // :: If there is more then one terminal it will switch to next one,
                 // :: if the second argument is set to true the events will be not fired.
                 // :: Used on init
                 // -----------------------------------------------------------------------
