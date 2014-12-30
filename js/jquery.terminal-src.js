@@ -1539,11 +1539,11 @@
         // Keystrokes
         var object;
         var apostrophe = false;
+        var firefoxMode = false;
         var normalLayout = false;
         $(document.documentElement || window).bind('keypress.cmd keydown.cmd keyup.cmd', function(e) {
-
             // Fix for keyboards with dead keys
-            
+
             /* How it works:
             Keyboard with dead keys use no keypress for apostrophes. Instead they
             wait for the next character and only use keyup/keydown events. E.g.
@@ -1575,8 +1575,17 @@
             only the second character is visible.
             */
 
+            /* Firefox mode indicator (We need this, because firefox handles
+            backspaces in combination with apostrophes slightly different than
+            Chrome does. Firefox also does not use e.which for certain keys).*/
+            if (typeof e.key !== "undefined") {
+                if (e.key.indexOf("Dead") > -1) {
+                    firefoxMode = true;
+                }
+            }
+
             // Normal layout indicator
-            if (e.which == 39 || e.which == 34) {
+            if (e.which === 39 || e.which === 34) {
                 if (!normalLayout) {
                     normalLayout = true;
                 }
@@ -1585,20 +1594,20 @@
             }
 
             // Dead key layout indicator
-            if (normalLayout && e.which == 229) {
+            if ((normalLayout && e.which === 229) || (firefoxMode && e.key.indexOf("Dead") > -1)) {
                 normalLayout = false;
             }
 
             // When we have a keycode 222, we insert a ' or a "
-            if (e.type == "keyup" && e.which === 222) {
+            if (e.type == "keyup" && (e.which === 222 || (firefoxMode && (e.key == "DeadUmlaut" || e.key == "DeadAcute")))) {
                 e.shiftKey ? self.insert('"') : self.insert("'")
                 apostrophe = true
                 return false;
             }
 
             // If backspace is pressed, we reset the apostrophe to false
-            if (e.which == 8) {
-                if (apostrophe && !normalLayout) {
+            if (e.which === 8) {
+                if (apostrophe && !normalLayout && !firefoxMode) {
                     // Double backspace required, so we trigger one for you.
                     var e = jQuery.Event("keydown");
                     e.which = 8;
